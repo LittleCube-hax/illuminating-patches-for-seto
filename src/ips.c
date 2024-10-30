@@ -3,55 +3,94 @@
 #include <string.h>
 
 #include <ips.h>
+#include <drivers.h>
 
 #define BE_CVT_3(x) (((x & 0xFF) << 16) | (x & 0xFF00) | ((x & 0xFF0000) >> 16))
-#define BE_CVT_2(x) ((x & 0xFF) | ((x & 0xFF00) >> 8))
+#define BE_CVT_2(x) (((x & 0xFF) << 8) | ((x & 0xFF00) >> 8))
+
+#define READ_3(buf, off) BE_CVT_3(*((u32*) (ips_buffer + buffer_i)))
+#define READ_2(buf, off) BE_CVT_2(*((u16*) (ips_buffer + buffer_i)))
 
 IPSRecord* load_ips(const char* ips_path)
 {
-	FILE* ips_file = fopen(ips_path, "r");
-	if (ips_file == NULL)
+	char* ips_buffer = read_file_buffer(ips_path);
+	
+	if (ips_buffer == NULL)
 	{
 		return NULL;
 	}
+	
+	long filelen = get_file_length(ips_path);
 	
 	IPSRecord* records = malloc(sizeof(IPSRecord));
 	
 	size_t len = 1;
 	
-	// read past "PATCH"
-	fseek(ips_file, 5, SEEK_SET);
-	
 	size_t records_i = 0;
 	
 	IPSRecord* record;
 	
-	while (!feof(ips_file))
+	size_t buffer_i = 5;
+	
+	while (buffer_i < filelen)
 	{
+		printf("at pos %zu (0x%08zX)\n", buffer_i, buffer_i);
+		
 		record = &records[records_i];
 		
-		fread(&record->offset, 3, 1, ips_file);
-		record->offset = BE_CVT_3(record->offset);
+		record->offset = READ_3(ips_buffer, buffer_i);
+		buffer_i += 3;
+		
+		if (record->offset == 0x454F46)
+		{
+			printf("\ngot eof\n");
+			break;
+		}
 		
 		printf("offset: 0x%06X\n", record->offset);
 		
-		fread(&record->size, 2, 1, ips_file);
-		record->size = BE_CVT_2(record->size);
+		record->size = READ_2(ips_buffer, buffer_i);
+		buffer_i += 2;
 		
 		printf("size: 0x%04X\n", record->size);
 		
-		record->data = malloc(record->size);
-		
-		fread(record->data, record->size, 1, ips_file);
-		
-		printf("data: ");
-		
-		for (size_t i = 0; i < record->size; ++i)
+		if (record->size == 0)
 		{
-			printf("%02X ", (u8) record->data[i]);
+			record->rle = true;
+			
+			record->size = READ_2(ips_buffer, buffer_i);
+			buffer_i += 2;
+			
+			printf("RLE size: 0x%04X\n", record->size);
+			
+			record->data = malloc(1);
+			record->data[0] = ips_buffer[buffer_i];
+			buffer_i += 1;
+			
+			printf("data: %02X", record->data[0]);
+			
+			if (record->size == 0)
+			{
+				printf("\nRLE with size 0 is broken (silly rpge), skipping...");
+				continue;
+			}
 		}
 		
-		printf("\n");
+		else
+		{
+			record->data = malloc(record->size);
+			memcpy(record->data, &ips_buffer[buffer_i], record->size);
+			buffer_i += record->size;
+			
+			printf("data: ");
+			
+			for (size_t i = 0; i < record->size; ++i)
+			{
+				printf("%02X ", (u8) record->data[i]);
+			}
+		}
+		
+		printf("\n\n");
 		
 		records_i += 1;
 		
@@ -59,13 +98,13 @@ IPSRecord* load_ips(const char* ips_path)
 		{
 			len <<= 1;
 			IPSRecord* new_records = malloc(len*sizeof(IPSRecord));
-			memcpy(new_records, records, len >> 1);
+			memcpy(new_records, records, (len >> 1)*sizeof(IPSRecord));
 			free(records);
 			records = new_records;
 		}
 	}
 	
-	fclose(ips_file);
+	printf("ended at pos %zu (0x%08zX)\n", buffer_i, buffer_i);
 	
 	records[records_i].offset = 0x1000000;
 	
@@ -79,6 +118,7 @@ void close_ips(IPSRecord* records)
 	while (records[records_i].offset < 0x1000000)
 	{
 		free(records[records_i].data);
+		records_i += 1;
 	}
 	
 	free(records);

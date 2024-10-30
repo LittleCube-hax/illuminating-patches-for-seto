@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include <ips.h>
+#include <drivers.h>
 
 int main()
 {
@@ -17,6 +18,8 @@ int main()
 		fprintf(stderr, "could not find `rpge.ips', quitting\n");
 		return -1;
 	}
+	
+	//~ create_folder("rpge");
 	
 	close_ips(records);
 	
