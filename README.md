@@ -10,6 +10,6 @@ This tool takes a different approach than the original: instead of reading the c
 
 This tool is currently specialized for use with Final Fantasy V (Japan) for the SNES, (same as Arson's tool) but its scope may be expanded in the future.
 
-If you need to build from source, you only need `gcc`, `make`, and `cmake`.
+If you need to build from source, you only need `clang`, `make`, and `cmake`.
 
 To use, simply double-click the `decompile` executable when `rpge.ips` is in the same folder. Once you are satisfied with your edits, double-click the `compile` executable.
