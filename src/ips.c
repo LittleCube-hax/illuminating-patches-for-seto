@@ -13,14 +13,13 @@
 
 IPSRecord* load_ips(const char* ips_path)
 {
-	char* ips_buffer = read_file_buffer(ips_path);
+	long filelen;
+	char* ips_buffer = read_file_buffer(ips_path, &filelen);
 	
 	if (ips_buffer == NULL)
 	{
 		return NULL;
 	}
-	
-	long filelen = get_file_length(ips_path);
 	
 	IPSRecord* records = malloc(sizeof(IPSRecord));
 	
@@ -34,8 +33,6 @@ IPSRecord* load_ips(const char* ips_path)
 	
 	while (buffer_i < filelen)
 	{
-		printf("at pos %zu (0x%08zX)\n", buffer_i, buffer_i);
-		
 		record = &records[records_i];
 		
 		record->offset = READ_3(ips_buffer, buffer_i);
@@ -43,16 +40,11 @@ IPSRecord* load_ips(const char* ips_path)
 		
 		if (record->offset == 0x454F46)
 		{
-			printf("\ngot eof\n");
 			break;
 		}
 		
-		printf("offset: 0x%06X\n", record->offset);
-		
 		record->size = READ_2(ips_buffer, buffer_i);
 		buffer_i += 2;
-		
-		printf("size: 0x%04X\n", record->size);
 		
 		if (record->size == 0)
 		{
@@ -61,17 +53,13 @@ IPSRecord* load_ips(const char* ips_path)
 			record->size = READ_2(ips_buffer, buffer_i);
 			buffer_i += 2;
 			
-			printf("RLE size: 0x%04X\n", record->size);
-			
 			record->data = malloc(1);
 			record->data[0] = ips_buffer[buffer_i];
 			buffer_i += 1;
 			
-			printf("data: %02X", record->data[0]);
-			
 			if (record->size == 0)
 			{
-				printf("\nRLE with size 0 is broken (silly rpge), skipping...");
+				printf("Broken RLE with size 0 (silly rpge), skipping...\n");
 				continue;
 			}
 		}
@@ -81,16 +69,7 @@ IPSRecord* load_ips(const char* ips_path)
 			record->data = malloc(record->size);
 			memcpy(record->data, &ips_buffer[buffer_i], record->size);
 			buffer_i += record->size;
-			
-			printf("data: ");
-			
-			for (size_t i = 0; i < record->size; ++i)
-			{
-				printf("%02X ", (u8) record->data[i]);
-			}
 		}
-		
-		printf("\n\n");
 		
 		records_i += 1;
 		
@@ -103,8 +82,6 @@ IPSRecord* load_ips(const char* ips_path)
 			records = new_records;
 		}
 	}
-	
-	printf("ended at pos %zu (0x%08zX)\n", buffer_i, buffer_i);
 	
 	records[records_i].offset = 0x1000000;
 	
